@@ -12,17 +12,8 @@ import { WebView } from '@nativescript/core/ui/web-view';
 import { EventData } from '@nativescript/core/data/observable';
 import { isAndroid, isIOS } from '@nativescript/core/platform';
 import { openUrl } from '@nativescript/core/utils';
-
-let SFSafariViewController;
-if (isIOS) {
-  SFSafariViewController = (<any>global).SFSafariViewController || require('@nativescript/core').SFSafariViewController;
-}
-
-interface CustomLoadFinishedEventData extends EventData {
-  object: WebView;
-  url: string;
-  error?: string; // Si hay un error de carga
-}
+import { Dialogs,Utils } from '@nativescript/core';
+import { InAppBrowser } from 'nativescript-inappbrowser';
 
 export default Vue.extend({
   computed: {
@@ -31,66 +22,62 @@ export default Vue.extend({
     }
   },
   methods: {
-    onWebViewNavigation(args: any) {
+    async onWebViewNavigation(args: any) {
       const url = args.url;
       try {
-        const parsedUrl = new URL(url);
-        // Verifica que el hostname termine en .fitelven.com.ve (subdominio)
-        const isSubdomain = parsedUrl.hostname.endsWith('.fitelven.com.ve');
-        if (!isSubdomain) return;
-        if (isIOS && typeof (globalThis as any).SFSafariViewController !== 'undefined') {
-          // Abrir con SFSafariViewController en iOS
-          const nsUrl = NSURL.URLWithString(url);
-          const safariVC = (globalThis as any).SFSafariViewController.alloc().initWithURL(nsUrl);
-          const app = UIApplication.sharedApplication;
-          const rootVC = app.keyWindow.rootViewController;
-          rootVC.presentViewControllerAnimatedCompletion(safariVC, true, () => {});
-        } else {
-          openUrl(url);
-        }
-        args.object.stopLoading && args.object.stopLoading();
-        if (isAndroid) {
-          android.os.Process.killProcess(android.os.Process.myPid());
-        }
-      } catch (e) {
-        // URL no válida
-        return;
+      if (await InAppBrowser.isAvailable()) {
+        const result = await InAppBrowser.open(url, {
+          // iOS Properties
+          dismissButtonStyle: 'cancel',
+          preferredBarTintColor: '#453AA4',
+          preferredControlTintColor: 'white',
+          readerMode: false,
+          animated: true,
+          modalPresentationStyle: 'fullScreen',
+          modalTransitionStyle: 'coverVertical',
+          modalEnabled: true,
+          enableBarCollapsing: false,
+          // Android Properties
+          showTitle: true,
+          toolbarColor: '#6200EE',
+          secondaryToolbarColor: 'black',
+          navigationBarColor: 'black',
+          navigationBarDividerColor: 'white',
+          enableUrlBarHiding: true,
+          enableDefaultShare: true,
+          forceCloseOnRedirection: false,
+          // Specify full animation resource identifier(package:anim/name)
+          // or only resource name(in case of animation bundled with app).
+          animations: {
+            startEnter: 'slide_in_right',
+            startExit: 'slide_out_left',
+            endEnter: 'slide_in_left',
+            endExit: 'slide_out_right'
+          },
+          headers: {
+            'my-custom-header': 'my custom header value'
+          },
+          hasBackButton: true,
+          browserPackage: '',
+          showInRecents: false
+        });
+        Dialogs.alert({
+          title: 'Response',
+          message: JSON.stringify(result),
+          okButtonText: 'Ok'
+        });
       }
-    },
-    onWebViewLoaded(args: CustomLoadFinishedEventData) {
-      const webView = args.object as WebView;
-
-      if (isAndroid) {
-        const androidWebView = webView.android; // Acceder a la instancia nativa de Android WebView
-
-        const webSettings = androidWebView.getSettings();
-        webSettings.setDomStorageEnabled(true); // Habilitar DOM Storage (para localStorage)
-        webSettings.setJavaScriptEnabled(true); // Asegúrate de que JavaScript esté habilitado
-        webSettings.setDatabaseEnabled(true); // También puede ser útil para algunas cosas
-
-        // Habilitar cookies
-        const cookieManager = android.webkit.CookieManager.getInstance();
-        cookieManager.setAcceptCookie(true);
-        if (android.os.Build.VERSION.SDK_INT >= 21) { // Para Android 5.0 (Lollipop) y superior
-          cookieManager.setAcceptThirdPartyCookies(androidWebView, true);
-        }
-
-      } else if (isIOS) {
-        const iosWebView = webView.ios; // Acceder a la instancia nativa de iOS WKWebView
-
-        // WKWebView habilita localStorage y cookies por defecto de forma más robusta
-        // Sin embargo, si tienes problemas, podrías investigar WKWebsiteDataStore.
-        // WKWebsiteDataStore.default().fetchDataRecordsOfTypes(WKWebsiteDataStore.allWebsiteDataTypes(), (records) => {
-        //   records.forEach((record) => {
-        //     console.log(`Data Record: ${record.displayName}`);
-        //   });
-        // });
-        // Para iOS 11+, puedes usar:
-        // let config = iosWebView.configuration;
-        // if (config && config.websiteDataStore) {
-        //     config.websiteDataStore = WKWebsiteDataStore.default();
-        // }
+      else {
+        Utils.openUrl(url);
       }
+    }
+    catch(error) {
+      Dialogs.alert({
+        title: 'Error',
+        message: error.message,
+        okButtonText: 'Ok'
+      });
+    }
     }
   }
 });
