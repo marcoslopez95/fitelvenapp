@@ -12,7 +12,12 @@ import { WebView } from '@nativescript/core/ui/web-view';
 import { EventData } from '@nativescript/core/data/observable';
 import { isAndroid, isIOS } from '@nativescript/core/platform';
 import { openUrl } from '@nativescript/core/utils';
-// Para mayor claridad y si el tipado estricto es importante, puedes definirla así:
+
+let SFSafariViewController;
+if (isIOS) {
+  SFSafariViewController = (<any>global).SFSafariViewController || require('@nativescript/core').SFSafariViewController;
+}
+
 interface CustomLoadFinishedEventData extends EventData {
   object: WebView;
   url: string;
@@ -33,7 +38,16 @@ export default Vue.extend({
         // Verifica que el hostname termine en .fitelven.com.ve (subdominio)
         const isSubdomain = parsedUrl.hostname.endsWith('.fitelven.com.ve');
         if (!isSubdomain) return;
-        openUrl(url);
+        if (isIOS && typeof (globalThis as any).SFSafariViewController !== 'undefined') {
+          // Abrir con SFSafariViewController en iOS
+          const nsUrl = NSURL.URLWithString(url);
+          const safariVC = (globalThis as any).SFSafariViewController.alloc().initWithURL(nsUrl);
+          const app = UIApplication.sharedApplication;
+          const rootVC = app.keyWindow.rootViewController;
+          rootVC.presentViewControllerAnimatedCompletion(safariVC, true, () => {});
+        } else {
+          openUrl(url);
+        }
         args.object.stopLoading && args.object.stopLoading();
         if (isAndroid) {
           android.os.Process.killProcess(android.os.Process.myPid());
@@ -42,7 +56,6 @@ export default Vue.extend({
         // URL no válida
         return;
       }
-
     },
     onWebViewLoaded(args: CustomLoadFinishedEventData) {
       const webView = args.object as WebView;
@@ -93,7 +106,7 @@ export default Vue.extend({
 
 .info {
   font-size: 20;
-  horizontal-align: center;
-  vertical-align: center;
+  text-align: center;
+  vertical-align: middle;
 }
 </style>
